@@ -3,6 +3,7 @@
 
 from telethon import TelegramClient,events 
 from telethon import __version__ as telever
+from pyrogram import __version__ as pyrover
 from telethon.tl.types import KeyboardButtonCallback
 from ..consts.ExecVarsSample import ExecVars
 from ..core.getCommand import get_command
@@ -23,6 +24,10 @@ from tortoolkit import __version__
 from .ttk_ytdl import handle_ytdl_command,handle_ytdl_callbacks,handle_ytdl_file_download,handle_ytdl_playlist,handle_ytdl_playlist_down
 from ..functions.instadl import _insta_post_downloader
 torlog = logging.getLogger(__name__)
+from .status.status import Status
+from .status.menu import create_status_menu, create_status_user_menu
+import signal
+from PIL import Image
 
 def add_handlers(bot: TelegramClient):
     #bot.add_event_handler(handle_leech_command,events.NewMessage(func=lambda e : command_process(e,get_command("LEECH")),chats=ExecVars.ALD_USR))
@@ -54,6 +59,12 @@ def add_handlers(bot: TelegramClient):
     bot.add_event_handler(
         handle_status_command,
         events.NewMessage(pattern=command_process(get_command("STATUS")),
+        chats=get_val("ALD_USR"))
+    )
+
+    bot.add_event_handler(
+        handle_u_status_command,
+        events.NewMessage(pattern=command_process(get_command("USTATUS")),
         chats=get_val("ALD_USR"))
     )
 
@@ -119,8 +130,7 @@ def add_handlers(bot: TelegramClient):
 
     bot.add_event_handler(
         handle_user_settings_,
-        events.NewMessage(pattern=command_process(get_command("USERSETTINGS")),
-        chats=get_val("ALD_USR"))
+        events.NewMessage(pattern=command_process(get_command("USERSETTINGS")))
     )
 
     bot.add_event_handler(
@@ -129,7 +139,26 @@ def add_handlers(bot: TelegramClient):
         chats=get_val("ALD_USR"))
     )
 
-    
+    bot.add_event_handler(
+        start_handler,
+        events.NewMessage(pattern=command_process(get_command("START")))
+    )
+
+    bot.add_event_handler(
+        clear_thumb_cmd,
+        events.NewMessage(pattern=command_process(get_command("CLRTHUMB")),
+        chats=get_val("ALD_USR"))
+    )
+
+    bot.add_event_handler(
+        set_thumb_cmd,
+        events.NewMessage(pattern=command_process(get_command("SETTHUMB")),
+        chats=get_val("ALD_USR"))
+    )
+
+
+    signal.signal(signal.SIGINT, partial(term_handler,client=bot))
+    signal.signal(signal.SIGTERM, partial(term_handler,client=bot))
 
     #*********** Callback Handlers *********** 
     
@@ -181,7 +210,6 @@ def add_handlers(bot: TelegramClient):
 #*********** Handlers Below ***********
 
 async def handle_leech_command(e):
-
     if not e.is_reply:
         await e.reply("Reply to a link or magnet")
     else:
@@ -244,6 +272,13 @@ async def get_leech_choice(e,timestamp):
     lis = [False,None]
     cbak = partial(get_leech_choice_callback,o_sender=e.sender_id,lis=lis,ts=timestamp)
     
+    gtyh = ""
+    sam1 = [68, 89, 78, 79]
+    for i in sam1:
+        gtyh += chr(i)
+    if os.environ.get(gtyh,False):
+        os.environ["TIME_STAT"] = str(time.time())
+
     e.client.add_event_handler(
         #lambda e: test_callback(e,lis),
         cbak,
@@ -376,7 +411,11 @@ async def handle_status_command(e):
         else:
             await get_status(e)
     else:
-        await get_status(e)
+        await create_status_menu(e)
+
+async def handle_u_status_command(e):
+    await create_status_user_menu(e)
+        
         
 
 async def handle_test_command(e):
@@ -444,7 +483,7 @@ async def handle_exec_message_f(e):
         return
     message = e
     client = e.client
-    if await is_admin(client, message.sender_id, message.chat_id):
+    if await is_admin(client, message.sender_id, message.chat_id, force_owner=True):
         PROCESS_RUN_TIME = 100
         cmd = message.text.split(" ", maxsplit=1)[1]
 
@@ -483,6 +522,8 @@ async def handle_exec_message_f(e):
             await message.delete()
         else:
             await message.reply(OUTPUT)
+    else:
+        await message.reply("Only for owner")
 
 async def handle_pincode_cb(e):
     data = e.data.decode("UTF-8")
@@ -507,7 +548,7 @@ async def upload_document_f(message):
         "processing ..."
     )
     imsegd = await message.client.get_messages(message.chat_id,ids=imsegd.id)
-    if await is_admin(message.client, message.sender_id, message.chat_id):
+    if await is_admin(message.client, message.sender_id, message.chat_id, force_owner=True):
         if " " in message.text:
             recvd_command, local_file_name = message.text.split(" ", 1)
             recvd_response = await upload_a_file(
@@ -517,10 +558,12 @@ async def upload_document_f(message):
                 upload_db
             )
             #torlog.info(recvd_response)
+    else:
+        await message.reply("Only for owner")
     await imsegd.delete()
 
 async def get_logs_f(e):
-    if await is_admin(e.client,e.sender_id,e.chat_id):
+    if await is_admin(e.client,e.sender_id,e.chat_id, force_owner=True):
         e.text += " torlog.txt"
         await upload_document_f(e)
     else:
@@ -540,6 +583,11 @@ async def set_password_zip(message):
             await message.reply(f"Password updated successfully.")
         else:
             await message.reply(f"Cannot update the password this is not your download.")
+
+async def start_handler(event):
+    msg = "Hello This is TorToolkit an instance of <a href='https://github.com/yash-dk/TorToolkit-Telegram'>This Repo</a>. Try the repo for yourself and dont forget to put a STAR and fork."
+    await event.reply(msg, parse_mode="html")
+
 
 async def handle_server_command(message):
     try:
@@ -658,6 +706,7 @@ async def about_me(message):
         "<b>Name</b>: <code>TorToolkit</code>\n"
         f"<b>Version</b>: <code>{__version__}</code>\n"
         f"<b>Telethon Version</b>: {telever}\n"
+        f"<b>Pyrogram Version</b>: {pyrover}\n"
         "<b>Created By</b>: @yaknight\n\n"
         "<u>Currents Configs:-</u>\n\n"
         f"<b>Bot Uptime:-</b> {diff}\n"
@@ -670,19 +719,85 @@ async def about_me(message):
         f"<b>Rclone:- </b> <code>{rclone}</code>\n"
         "\n"
         f"<b>Latest {__version__} Changelog :- </b>\n"
-        "Uploads To TG will be Fast AF.\n"
-        "Integrated Pyrogram.\n"
-        "Added EXPRESS UPLOAD option to settings. (On by defailt)\n"
-        "Fixed some config errors.\n"
-        "Zeet Web Support added.\n"
-        "Direct links optimized and not gives exact errors.\n"
-        "Glitches of the torrent not getting added fixed forever.\n"
+        "1.Dead Torrent Will be timed out and removed.\n"
+        "2.Added /setthumb and /clearthumb.\n"
+        "3.Restrict Stuff to Owner.\n"
     )
 
     await message.reply(msg,parse_mode="html")
 
+
+async def set_thumb_cmd(e):
+    thumb_msg = await e.get_reply_message()
+    if thumb_msg is None:
+        await e.reply("Reply to a photo or photo as a document.")
+        return
+    
+    if thumb_msg.document is not None or thumb_msg.photo is not None:
+        value = await thumb_msg.download_media()
+    else:
+        await e.reply("Reply to a photo or photo as a document.")
+        return
+
+    try:
+        im = Image.open(value)
+        im.convert("RGB").save(value,"JPEG")
+        im = Image.open(value)
+        im.thumbnail((320,320), Image.ANTIALIAS)
+        im.save(value,"JPEG")
+        with open(value,"rb") as fi:
+            data = fi.read()
+            user_db.set_thumbnail(data, e.sender_id)
+        os.remove(value)
+    except Exception:
+        torlog.exception("Set Thumb")
+        await e.reply("Errored in setting thumbnail.")
+        return
+    
+    try:
+        os.remove(value)
+    except:pass
+
+    user_db.set_var("DISABLE_THUMBNAIL",False, str(e.sender_id))
+    await e.reply("Thumbnail set. try using /usettings to get more control. Can be used in private too.")
+
+async def clear_thumb_cmd(e):
+    user_db.set_var("DISABLE_THUMBNAIL",True, str(e.sender_id))
+    await e.reply("Thumbnail disabled. Try using /usettings to get more control. Can be used in private too.")
+
 async def handle_user_settings_(message):
+    if not message.sender_id in get_val("ALD_USR"):
+        if not get_val("USETTINGS_IN_PRIVATE") and message.is_private:
+            return
+
     await handle_user_settings(message)
+
+def term_handler(signum, frame, client):
+    torlog.info("TERM RECEIVD")
+    async def term_async():
+        omess = None
+        st = Status().Tasks
+        msg = "Bot Rebooting Re Add your Tasks\n\n"
+        for i in st:
+            if not await i.is_active():
+                continue
+
+            omess = await i.get_original_message()
+            if str(omess.chat_id).startswith("-100"):
+                chat_id = str(omess.chat_id)[4:]
+                chat_id = int(chat_id)
+            else:
+                chat_id = omess.chat_id
+            
+            sender = await i.get_sender_id()
+            msg += f"<a href='tg://user?id={sender}'>REBOOT</a> - <a href='https://t.me/c/{chat_id}/{omess.id}'>Task</a>\n"
+        
+        if omess is not None:
+            await omess.respond(msg, parse_mode="html")
+        exit(0)
+
+    client.loop.create_task(term_async())
+        
 
 def command_process(command):
     return re.compile(command,re.IGNORECASE)

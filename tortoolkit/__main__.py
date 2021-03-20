@@ -5,6 +5,7 @@ from tortoolkit.core.HandleManager import add_handlers
 from tortoolkit.core.getVars import get_val
 import logging,asyncio
 from tortoolkit.core.wserver import start_server_async
+from tortoolkit.core.status.auto_delete import del_status
 from pyrogram import Client
 try:
     from tortoolkit.functions.rstuff import get_rstuff
@@ -34,13 +35,15 @@ if __name__ == "__main__":
     logging.info("Telethon Client created.")
 
     # Pyro Client creation and linking
-    pyroclient = Client("pyrosession", api_id=get_val("API_ID"), api_hash=get_val("API_HASH"), bot_token=get_val("BOT_TOKEN"), workers=343)
+    pyroclient = Client("pyrosession", api_id=get_val("API_ID"), api_hash=get_val("API_HASH"), bot_token=get_val("BOT_TOKEN"), workers=100)
     pyroclient.start()
     ttkbot.pyro = pyroclient
     logging.info("Pryogram Client created.")
 
     # Associate the handlers
     add_handlers(ttkbot)
+
+    ttkbot.loop.create_task(del_status())
 
     if get_val("IS_VPS"):
         ttkbot.loop.run_until_complete(start_server_async(get_val("SERVPORT")))
